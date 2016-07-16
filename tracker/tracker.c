@@ -67,8 +67,8 @@ int tracker() {
 
                 char *pkgname = remove_prefix(requestBuff);
 
-                char query[150];
-                sprintf(query, "SELECT * FROM `packages` WHERE `name`='%s'", pkgname);
+                char query[200];
+                sprintf(query, "SELECT `fullname` FROM `packages` WHERE `name`='%s' ORDER BY `added` DESC LIMIT 1", pkgname);
 
                 mysql_query(con, query);
                 result = mysql_store_result(con);
@@ -82,6 +82,10 @@ int tracker() {
                     send(connfd, &response, strlen(response)+1, 0);
                 }
                 else {
+                    row = mysql_fetch_row(result);
+
+                    char *full_pkg_name = row[0];
+
                     // get client list
                     mysql_query(con, "SELECT * FROM `clients`");
                     result = mysql_store_result(con);
@@ -123,17 +127,18 @@ int tracker() {
 
                             // send package request to server
                             strcpy(request, "EXT:");
-                            strcat(request, pkgname);
-                            send(nodefd, &request, strlen(pkgname)+5, 0);
+                            strcat(request, full_pkg_name);
+                            send(nodefd, &request, strlen(full_pkg_name)+5, 0);
 
                             // receive a response to see if it has it
                             recv(nodefd, &response, 10, 0);
 
                             // reply with new IP address
                             if (strcmp(response, "EXISTS") == 0) {
-                                char remote_address[20];
+                                char remote_address[170];
                                 strcpy(remote_address, address);
-                                printf("%s: %s\n", remote_address, pkgname);
+                                strcat(remote_address, ":");
+                                strcat(remote_address, full_pkg_name);
 
                                 send(connfd, &remote_address, strlen(remote_address)+1, 0);
                                 found = 1;
@@ -166,7 +171,7 @@ int tracker() {
                 char *pkgname = remove_prefix(requestBuff);
 
                 char query[150];
-                sprintf(query, "SELECT `hash` FROM `packages` WHERE `name`='%s'", pkgname);
+                sprintf(query, "SELECT `hash` FROM `packages` WHERE `fullname`='%s'", pkgname);
 
                 mysql_query(con, query);
                 result = mysql_store_result(con);
@@ -189,6 +194,27 @@ int tracker() {
                         send(connfd, &db_hash, strlen(db_hash)+1, 0);
                         break;
                     }
+                }
+                
+            }
+
+            else if (strstr(requestBuff, "DEP:")) {
+
+                char *pkgname = remove_prefix(requestBuff);
+
+                char query[150];
+                sprintf(query, "SELECT `deps` FROM `packages` WHERE `name`='%s'", pkgname);
+
+                mysql_query(con, query);
+                result = mysql_store_result(con);
+
+                
+                // return hash
+                while ((row = mysql_fetch_row(result))) {
+                    char deps[1000];
+                    strcpy(deps, row[0]);
+                    send(connfd, &deps, strlen(deps)+1, 0);
+                    break;
                 }
                 
             }
